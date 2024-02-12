@@ -360,6 +360,42 @@ std::unique_ptr<Graph> GenerateGraphForSymmetryDetection(
         graph->AddArc(nodes[2], nodes[0]);  // TODO(user): not needed?
         break;
       }
+      case ConstraintProto::kLinMax: {
+        const LinearExpressionProto& target_expr =
+            constraint.lin_max().target();
+
+        std::vector<int64_t> target_color = color;
+        target_color.push_back(target_expr.offset());
+        const int target_node = new_node(target_color);
+
+        for (int j = 0; j < target_expr.vars_size(); ++j) {
+          const int ref = target_expr.vars(j);
+          const int var_node = PositiveRef(ref);
+          const int64_t coeff = RefIsPositive(ref) ? target_expr.coeffs(j)
+                                                   : -target_expr.coeffs(j);
+          graph->AddArc(get_coefficient_node(var_node, coeff), target_node);
+        }
+
+        for (int i = 0; i < constraint.lin_max().exprs_size(); ++i) {
+          const LinearExpressionProto& expr = constraint.lin_max().exprs(i);
+
+          std::vector<int64_t> local_color = color;
+          local_color.push_back(expr.offset());
+          const int local_node = new_node(local_color);
+
+          for (int j = 0; j < expr.vars().size(); ++j) {
+            const int ref = expr.vars(j);
+            const int var_node = PositiveRef(ref);
+            const int64_t coeff =
+                RefIsPositive(ref) ? expr.coeffs(j) : -expr.coeffs(j);
+            graph->AddArc(get_coefficient_node(var_node, coeff), local_node);
+          }
+
+          graph->AddArc(local_node, target_node);
+        }
+
+        break;
+      }
       case ConstraintProto::kNoOverlap: {
         // Note(user): This require that intervals appear before they are used.
         // We currently enforce this at validation, otherwise we need two passes
